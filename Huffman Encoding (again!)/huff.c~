@@ -1,0 +1,172 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "huff.h"
+
+void huffman_code(char* comp_file, char* code_file, char* uncomp_file);
+long int count_char(unsigned char* input_str, unsigned char ch, long int total_ch);
+leaf* tree_enqueue(leaf** tree, long int character, long int occurence);
+void code_print(FILE* output, long int num, leaf* tree, unsigned char* string);
+void free_tree(leaf* tree);
+
+leaf* tree_enqueue(leaf** tree, long int character, long int occurence)
+{
+	leaf* curr = *tree;
+	long int num_leaf = -1;
+	long int comp = 1;
+	while(comp > 0 && curr != NULL)
+	{
+		num_leaf += 1;
+		comp = occurence - curr->occurs;
+		if(comp == 0)
+		{
+			comp = (long int)(character - curr->ascii);
+		}
+		curr = curr->next;
+	}
+	if(comp > 0)
+	{
+		num_leaf += 1;
+	}
+	if(num_leaf == 0)
+	{
+		leaf* new_head   = malloc(sizeof(*new_head));
+		if(new_head == NULL)
+		{
+			return NULL;
+		}
+		new_head->occurs = occurence;
+		new_head->ascii  = character;
+		new_head->next   = *tree;
+		new_head->left   = NULL;
+		new_head->right  = NULL;
+		*tree = new_head;
+		return *tree;
+	}
+	leaf* left_leaf = *tree;
+	for(long int i = 1; i < num_leaf; i++)
+	{
+		left_leaf = left_leaf->next;
+	}
+	leaf* right_leaf = left_leaf->next;
+	leaf* new_leaf = malloc(sizeof(*new_leaf));
+	if(new_leaf == NULL)
+	{
+		return NULL;
+	}
+	new_leaf->occurs = occurence;
+	new_leaf->ascii  = character;
+	new_leaf->next   = right_leaf;
+	new_leaf->left   = NULL;
+	new_leaf->right  = NULL;
+	left_leaf->next  = new_leaf;
+
+	return *tree;
+}
+long int count_char(unsigned char* input_str, unsigned char ch, long int total_ch)
+{
+	long int counter = 0;
+	for(long int i = 0; i < total_ch; ++i)
+	{
+		if(input_str[i] == ch)
+		{
+			counter++;
+		}
+	}
+
+	return counter;
+}
+
+void code_print(FILE* output, long int num, leaf* tree, unsigned char* string)
+{
+	if(tree->ascii != -1)
+	{
+		fputc(tree->ascii, output);
+		fputc(':', output);
+		for(long int i = 0; i < num; i++)
+		{
+			fputc(string[i], output);
+		}
+		fputc('\n', output);
+	}
+	else
+	{
+		string[num] = '0';
+		code_print(output, num + 1, tree->left, string);
+		string[num] = '1';
+		code_print(output, num + 1, tree->right, string);
+	}
+}
+
+void huffman_code(char* comp_file, char* code_file, char* uncomp_file)
+{
+	FILE* input = fopen(comp_file, "r");
+	FILE* code = fopen(code_file, "w");
+	FILE* uncomp = fopen(uncomp_file, "w");
+	fseek(input, 0, SEEK_SET);
+
+	long int total_chars = 0;
+	while(true)
+	{
+		char checker = fgetc(input);
+		if(checker == EOF)
+		{
+			break;
+		}
+		total_chars += 1;
+	}
+	fseek(input, 0, SEEK_SET);
+	unsigned char* input_str = malloc(sizeof(*input_str) * total_chars);
+	
+	for(long int i = 0; total_chars > i; i ++)
+	{
+		input_str[i] = fgetc(input);
+	}
+
+	leaf* char_leaf = NULL;
+	for(int i = 0; 256 > i; ++i)
+	{
+		long int num_chars = count_char(input_str, (unsigned char)(i), total_chars);
+		if(num_chars > 0)
+		{
+			char_leaf = tree_enqueue(&char_leaf, (unsigned char)(i), num_chars);
+		}
+	}
+
+	while(NULL != char_leaf -> next)
+	{
+		leaf* branch = malloc(sizeof(*branch));
+		branch -> ascii = -1;
+		branch->occurs = char_leaf->occurs + char_leaf->next->occurs;
+		
+		branch->left = char_leaf;
+		branch->right = char_leaf->next;
+
+		char_leaf = _root_enqueue(&char_leaf, &branch);
+		char_leaf = char_leaf->next->next;
+	}
+	
+	unsigned char* zeros_and_ones = malloc(sizeof(*zeros_and_ones) * total_chars);
+	code_print(code, 0, char_leaf, zeros_and_ones);
+	
+	fclose(input);
+	fclose(code);
+	fclose(uncomp);
+	free(input_str);
+	free(zeros_and_ones);
+	free_tree(char_leaf);
+} //NOTE: some logic of this code comes from my ECE 264 Fall 2017 HW14 assignment
+
+void free_tree(leaf* tree)
+{
+	if(tree->left != NULL)
+	{
+		leaf* left_branch = tree->left;
+		free_tree(left_branch);
+	}
+	if(tree->right != NULL)
+	{
+		leaf* right_branch = tree->right;
+		free_tree(right_branch);
+	}
+	free(tree);
+}
